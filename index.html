@@ -1,0 +1,807 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Human Progress Web</title>
+<style>
+  :root { --bg: #0f1115; --panel: #181b22; --text: #e6e6e6; --muted: #8a8f98; --line: #2a2f3a; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, sans-serif; overflow: hidden; }
+  body { display: flex; flex-direction: column; }
+  button, select, input[type=search] { background: #262b35; color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; font: inherit; }
+  button { cursor: pointer; }
+  button:hover { background: #303643; }
+  button.on { background: #3a4252; border-color: #56607a; }
+  label { cursor: pointer; user-select: none; white-space: nowrap; }
+
+  #top { flex: none; background: var(--panel); border-bottom: 1px solid var(--line); padding: 8px 16px; display: flex; flex-direction: column; gap: 6px; }
+  .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .sep { width: 1px; height: 22px; background: var(--line); }
+  #yearBox { min-width: 150px; }
+  #year { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  #era { font-size: 12px; color: var(--muted); }
+  #sliderWrap { flex: 1; min-width: 260px; position: relative; }
+  #eras { position: relative; height: 6px; margin: 0 8px; }
+  #eras span { position: absolute; top: 0; height: 6px; border-radius: 3px; }
+  #slider { width: 100%; margin: 2px 0 0; }
+  #ticks { position: relative; height: 14px; font-size: 11px; color: var(--muted); margin: 0 8px; }
+  #ticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+  #count { color: var(--muted); font-size: 12px; text-align: right; }
+  #latest { font-size: 12.5px; color: var(--muted); max-height: 3.2em; overflow: auto; }
+  #latest a { color: var(--text); cursor: pointer; }
+  #latest a:hover { text-decoration: underline; }
+  #domains { gap: 4px 12px; }
+  #domains label { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; }
+  .sw { width: 10px; height: 10px; border-radius: 50%; flex: none; display: inline-block; }
+  .legend { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
+  .legend svg { overflow: visible; }
+  .dash { display: inline-block; width: 18px; border-top: 2px dashed; vertical-align: middle; }
+  #search { width: 190px; }
+  #histBox summary { font-size: 11px; color: var(--muted); cursor: pointer; margin: 0 8px; }
+  #hist { height: 48px; margin: 2px 8px 0; }
+  #hist svg { width: 100%; height: 100%; display: block; }
+  #hist g { cursor: pointer; }
+  #hist g.future { opacity: .25; }
+  #hist g.cur .hit { fill: rgba(255,255,255,.12); }
+  #hist .hit { fill: transparent; }
+
+  #stage { flex: 1; position: relative; min-height: 0; }
+  #graph { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+  #graph.dragging { cursor: grabbing; }
+  #hint { position: absolute; left: 12px; bottom: 10px; font-size: 12px; color: var(--muted); pointer-events: none; }
+
+  #panel { position: absolute; top: 12px; right: 12px; width: 330px; max-height: calc(100% - 24px); overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  #panel:not(.pinned) #pClose { display: none; }
+  #pBar { display: flex; align-items: center; gap: 6px; margin: -6px -8px 6px 0; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); cursor: move; touch-action: none; user-select: none; }
+  #pBar span { flex: 1; }
+  #pBar button { padding: 0 8px; }
+  #panel.min { width: auto; }
+  #panel.min > :not(#pBar) { display: none; }
+  #panel.min #pBar { margin-bottom: -6px; }
+  #panel h2 { margin: 2px 0; font-size: 20px; }
+  #pPath, #pMeta { font-size: 12px; color: var(--muted); }
+  #pYear { font-weight: 600; }
+  #pDesc { margin: 10px 0 6px; }
+  #pWiki a { color: #8ab4ff; font-size: 13px; }
+  #pRel h4 { margin: 12px 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .chip { display: inline-block; margin: 0 4px 4px 0; padding: 3px 8px; font-size: 12px; border-radius: 12px; }
+  .chip.future { opacity: .5; }
+
+  #tip { position: fixed; z-index: 10; max-width: 340px; padding: 8px 10px; background: #0b0d11; border: 1px solid #3a4252; border-radius: 8px; font-size: 12.5px; pointer-events: none; display: none; box-shadow: 0 4px 16px rgba(0,0,0,.5); }
+  #tip .t { font-weight: 700; font-size: 14px; }
+  #tip .m { color: var(--muted); font-size: 12px; }
+  #tip .d { margin: 4px 0; }
+  #tip .l { color: #b8bec8; }
+  #tip .h { color: var(--muted); font-size: 11px; margin-top: 4px; }
+
+  .node { cursor: pointer; }
+  .node .sym { stroke: var(--bg); stroke-width: 1.5; }
+  .node.new .sym { animation: pop .9s ease-out; transform-box: fill-box; transform-origin: center; }
+  @keyframes pop { from { transform: scale(3); } to { transform: scale(1); } }
+  .node text { fill: #cfd3da; font-size: 10.5px; paint-order: stroke; stroke: var(--bg); stroke-width: 3px; stroke-linejoin: round; pointer-events: none; }
+  .node.d0 text { font-size: 14px; font-weight: 700; fill: #fff; }
+  .node.d1 text { font-size: 13px; font-weight: 700; }
+  .node.d2 text { font-size: 11.5px; font-weight: 600; fill: var(--text); }
+  .node.recent.d3 text, .mapdot.recent text { fill: #fff; font-weight: 600; }
+  .node.old { opacity: .45; }
+  .node.fresh .sym { filter: drop-shadow(0 0 4px #fff); }
+  .node.sel .sym { stroke: #fff !important; stroke-width: 2.5; }
+  .mapdot text { font-size: 7px; stroke-width: 2px; }
+  .mapdot .sym { stroke-width: .8; }
+  #land { fill: #1c2029; stroke: #2c3240; stroke-width: .6; }
+  .link { fill: none; stroke-opacity: .35; stroke-width: 1.2; }
+  .xlink { fill: none; stroke-width: 2; stroke-dasharray: 5 3; pointer-events: stroke; cursor: help; }
+  .dim { opacity: .15 !important; }
+
+  @media (max-width: 700px) {
+    #top { padding: 6px 10px; }
+    #year { font-size: 18px; }
+    #yearBox { min-width: 100px; }
+    #count, #hint { display: none; }
+    #panel { left: 12px; width: auto; top: auto; bottom: 12px; max-height: 50%; }
+  }
+</style>
+</head>
+<body>
+<header id="top">
+  <div class="row">
+    <button id="back" data-tip="Step back: return to the previous step, or jump back one era-width.">◀ Step</button>
+    <button id="play" data-tip="Play through history from the current year.">▶ Play</button>
+    <button id="fwd" data-tip="Step forward to the next batch of milestones. The list below shows everything new since the last step.">Step ▶</button>
+    <div id="yearBox"><div id="year"></div><div id="era"></div></div>
+    <div id="sliderWrap">
+      <div id="eras"></div>
+      <input type="range" id="slider" min="0" max="1000" step="1" value="0">
+      <div id="ticks"></div>
+      <details id="histBox" open><summary data-tip="Bar chart of milestones per stretch of the slider, stacked by domain.">Milestones over time</summary><div id="hist"></div></details>
+    </div>
+    <div id="count"></div>
+  </div>
+  <div id="latest"></div>
+  <div class="row">
+    <span>
+      <button id="vWeb" class="on" data-tip="Radial web: domains, groups and milestones as a tree.">Web</button>
+      <button id="vMap" data-tip="World map: where each milestone happened.">Map</button>
+    </span>
+    <input type="search" id="search" list="names" placeholder="Search milestones…" data-tip="Type a milestone or group name, then press Enter.">
+    <datalist id="names"></datalist>
+    <button id="expandAll" data-tip="Open every domain and group.">Expand all</button>
+    <button id="collapseAll" data-tip="Close everything back to the 15 domains.">Collapse all</button>
+    <button id="resetView" data-tip="Re-center and reset zoom and rotation.">Reset view</button>
+    <span class="sep"></span>
+    <label data-tip="Automatically open groups that have milestones in the current era, and close the rest."><input type="checkbox" id="auto" checked> Auto-expand era</label>
+    <label data-tip="Hide milestones older than the current era."><input type="checkbox" id="hideOld"> Hide older</label>
+    <label data-tip="How far back the current era reaches. Also the longest a Step can be.">Era width
+      <select id="window"><option value="30">Narrow</option><option value="60" selected>Medium</option><option value="120">Wide</option></select>
+    </label>
+    <span class="sep"></span>
+    <span id="kinds" class="row" style="gap:10px"></span>
+    <span class="legend" data-tip="Dashed lines appear when a milestone is selected."><span class="dash" style="color:#f2c14e"></span>built on <span class="dash" style="color:#5ad1ff"></span>led to <span class="dash" style="color:#4ade80"></span>explains</span>
+  </div>
+  <div id="domains" class="row"></div>
+</header>
+
+<main id="stage">
+  <svg id="graph">
+    <g id="world"><g id="links"></g><g id="xlinks"></g><g id="nodes"></g></g>
+    <g id="mapWorld" style="display:none"><path id="land"></path><g id="mapX"></g><g id="mapDots"></g></g>
+  </svg>
+  <div id="hint"></div>
+  <div id="panel">
+    <div id="pBar"><span>Details</span><button id="pMin" aria-label="Hide">–</button><button id="pClose" aria-label="Unpin">×</button></div>
+    <div id="pPath"></div>
+    <h2 id="pName"></h2>
+    <div id="pYear"></div>
+    <div id="pMeta"></div>
+    <p id="pDesc"></p>
+    <div id="pWiki"></div>
+    <div id="pRel"></div>
+  </div>
+</main>
+<div id="tip"></div>
+
+<script src="data.js"></script>
+<script src="world.js"></script>
+<script>
+// Key order is also the order of domains around the web.
+const COLORS = {
+  food: '#7bc96f', health: '#ef6f6c', shelter: '#c9a26b', environment: '#34d399', energy: '#f2c14e', materials: '#9aa5b1',
+  transport: '#5aa9e6', comm: '#c084fc', knowledge: '#4fd1c5', science: '#b5e655', space: '#8c9eff',
+  religion: '#f08bd0', society: '#fb7185', government: '#e2e8f0', empires: '#ff9f43',
+};
+const KINDS = {
+  invention: { label: 'Invention', tip: 'Something people made or a practice they adopted.' },
+  discovery: { label: 'Discovery', tip: 'Understanding how nature works. Green links show earlier practices it finally explained.' },
+  society: { label: 'Institution / idea', tip: 'A way of organizing people: governments, laws, religions, economies.' },
+  event: { label: 'Event', tip: 'Something that happened: wars, voyages, turning points.' },
+};
+const START = -12000, END = 2026, SPAN = END - START, MAP_SCALE = 3;
+const ERAS = [
+  { name: 'Stone Age', to: -10000, desc: 'Hunter-gatherers with stone tools, fire, language and art.' },
+  { name: 'Agricultural Revolution', to: -3500, desc: 'After the Ice Age: farming, herding and permanent villages.' },
+  { name: 'Ancient civilizations', to: 500, desc: 'Cities, writing, empires, philosophy and world religions.' },
+  { name: 'Middle Ages', to: 1450, desc: 'Feudal Europe, the Islamic Golden Age, Song China and the Mongol Empire.' },
+  { name: 'Early modern', to: 1760, desc: 'Printing, global exploration, the Scientific Revolution and the Enlightenment.' },
+  { name: 'Industrial age', to: 1945, desc: 'Steam, electricity, chemistry and mass production. Population and lifespans surge.' },
+  { name: 'Information age', to: Infinity, desc: 'Computers, the internet, spaceflight, genetics and globalization.' },
+];
+// Cubic scale: recent centuries get more slider room than the deep past.
+const toYear = s => Math.round(END - SPAN * (1 - s / 1000) ** 3);
+const toSlider = y => 1000 * (1 - Math.cbrt(Math.min(SPAN, Math.max(0, END - y)) / SPAN));
+const fmtYear = y => y < 0 ? `${(-y).toLocaleString()} BCE` : y < 1000 ? `${y} CE` : `${y}`;
+const fmtSpan = y => `${Math.abs(y).toLocaleString()} years`;
+const eraOf = y => ERAS.find(e => y < e.to);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const $ = id => document.getElementById(id);
+
+// Build the tree
+const byId = new Map(NODES.map(n => [n.id, { ...n, kids: [], ledTo: [], explainedBy: [], group: n.year == null }]));
+for (const n of byId.values()) {
+  if (n.parent) byId.get(n.parent).kids.push(n);
+  for (const [field, back] of [['from', 'ledTo'], ['explains', 'explainedBy']])
+    for (const f of n[field] || []) {
+      if (byId.has(f)) byId.get(f)[back].push(n.id);
+      else console.error(`${n.id}: unknown "${field}" id ${f}`);
+    }
+}
+const root = byId.get('humanity');
+const domainOrder = Object.keys(COLORS);
+(function walk(n, depth, domain, kind) {
+  n.depth = depth;
+  n.domain = depth === 1 ? n.id : domain;
+  n.kind = n.kind || kind;
+  n.kids.forEach(k => walk(k, depth + 1, n.domain, n.kind));
+  if (n.group) n.year = Math.min(...n.kids.map(k => k.year));
+  n.kids.sort(depth === 0 ? (a, b) => domainOrder.indexOf(a.id) - domainOrder.indexOf(b.id) : (a, b) => a.year - b.year);
+  n.leaves = n.group ? n.kids.flatMap(k => k.group ? k.leaves : [k]) : [];
+  n.s = toSlider(n.year);
+})(root, 0, null, 'invention');
+const domains = root.kids;
+const milestones = [...byId.values()].filter(n => !n.group && n.depth > 0).sort((a, b) => a.year - b.year);
+// Chain depth: every earlier milestone this one transitively builds on.
+const chainMemo = new Map();
+function chain(n) {
+  if (!chainMemo.has(n.id)) {
+    const set = new Set();
+    for (const f of n.from || []) { set.add(f); for (const g of chain(byId.get(f))) set.add(g); }
+    chainMemo.set(n.id, set);
+  }
+  return chainMemo.get(n.id);
+}
+// Map positions: region center plus a small spiral so milestones in one region don't overlap.
+const perRegion = {};
+for (const m of milestones) {
+  if (!m.where) continue;
+  const i = perRegion[m.where] = (perRegion[m.where] ?? -1) + 1;
+  const [lat, lon] = REGIONS[m.where].at, a = i * 2.4, d = 3 * Math.sqrt(i);
+  m.mx = lon * MAP_SCALE + d * Math.cos(a);
+  m.my = -lat * MAP_SCALE + d * Math.sin(a);
+}
+
+// State
+let cur = START, curS = 0, selected = null, selAnc = new Set(), mode = 'web';
+let stepFrom = null;
+const stepStack = [];
+const manual = new Map();
+const allowed = new Set(domains.map(d => d.id));
+const color = n => n.depth === 0 ? '#ffffff' : COLORS[n.domain];
+const ancestors = n => { const a = []; for (let m = byId.get(n.parent); m; m = byId.get(m.parent)) a.push(m); return a; };
+const linked = n => [...(n.from || []), ...n.ledTo, ...(n.explains || []), ...n.explainedBy].map(id => byId.get(id));
+
+const recent = l => l.year <= cur && l.s >= curS - +$('window').value;
+const fresh = l => stepFrom !== null && l.year > stepFrom && l.year <= cur;
+const hasRecent = n => n.leaves.some(recent);
+function isOpen(n) {
+  if (n.depth === 0) return true;
+  if (!allowed.has(n.domain)) return false;
+  if (manual.has(n.id)) return manual.get(n.id);
+  return n.depth === 1 || ($('auto').checked && hasRecent(n));
+}
+function shownByTime(n) {
+  if (n.year > cur) return false;
+  if (!$('hideOld').checked || n.depth === 1 || n === selected || selAnc.has(n)) return true;
+  return n.group ? hasRecent(n) : recent(n);
+}
+const vis = n => isOpen(n) ? n.kids.filter(shownByTime) : [];
+const hiddenCount = n => n.leaves.filter(l => l.year <= cur && (!$('hideOld').checked || recent(l))).length;
+
+// Shapes encode kind
+function symbol(kind, r) {
+  if (kind === 'discovery') { const q = r * 1.3; return `M0,${-q}L${q},0L0,${q}L${-q},0Z`; }
+  if (kind === 'society') { const q = r * 0.9; return `M${-q},${-q}h${2 * q}v${2 * q}h${-2 * q}Z`; }
+  if (kind === 'event') return `M0,${-r * 1.3}L${r * 1.15},${r * 0.8}L${-r * 1.15},${r * 0.8}Z`;
+  return `M${-r},0a${r},${r} 0 1,0 ${2 * r},0a${r},${r} 0 1,0 ${-2 * r},0`;
+}
+
+// Web layout
+let radii = [0, 130, 260, 420];
+function layout() {
+  const pos = new Map(), weight = new Map();
+  const weigh = n => { const v = vis(n); const w = v.length ? v.reduce((s, k) => s + weigh(k), 0) : 1; weight.set(n.id, w); return w; };
+  const total = weigh(root);
+  // Grow the outer ring so leaf labels keep ~13px of arc each.
+  const r3 = Math.max(420, total * 13 / (2 * Math.PI)), r2 = Math.max(260, r3 - 190);
+  radii = [0, Math.max(130, r2 / 2), r2, r3];
+  (function place(n, a0, a1) {
+    pos.set(n.id, { a: (a0 + a1) / 2, r: radii[n.depth] });
+    const per = (a1 - a0) / weight.get(n.id);
+    let a = a0;
+    for (const k of vis(n)) { const b = a + per * weight.get(k.id); place(k, a, b); a = b; }
+  })(root, 0, 2 * Math.PI);
+  return pos;
+}
+
+const NS = 'http://www.w3.org/2000/svg';
+function svgEl(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  parent.appendChild(e);
+  return e;
+}
+function htmlEl(tag, text, parent) {
+  const e = document.createElement(tag);
+  e.textContent = text;
+  parent.appendChild(e);
+  return e;
+}
+const linkLayer = $('links'), xLayer = $('xlinks'), nodeLayer = $('nodes');
+const els = new Map();
+let shown = new Map(), anim = null, animating = false, related = new Set(), rot = 0;
+
+const xy = p => [p.r * Math.sin(p.a + rot), -p.r * Math.cos(p.a + rot)];
+function linkPath(p, c) {
+  const m = (p.r + c.r) / 2;
+  const [x0, y0] = xy(p), [x1, y1] = xy({ a: p.a, r: m }), [x2, y2] = xy({ a: c.a, r: m }), [x3, y3] = xy(c);
+  return `M${x0},${y0}C${x1},${y1} ${x2},${y2} ${x3},${y3}`;
+}
+
+function render() {
+  selAnc = new Set(selected ? ancestors(selected) : []);
+  related = new Set();
+  if (selected) {
+    const add = id => { for (let m = byId.get(id); m; m = byId.get(m.parent)) related.add(m.id); };
+    [selected, ...linked(selected), ...selected.kids].forEach(m => add(m.id));
+  }
+  renderWeb();
+  renderMap();
+  updateHeader();
+  renderHist();
+}
+
+// Each bar covers an equal stretch of the slider, so it lines up with the timeline above.
+const BUCKETS = 50;
+function renderHist() {
+  if (!$('histBox').open) return;
+  const W = 1000 / BUCKETS, H = 40;
+  const bins = Array.from({ length: BUCKETS }, () => ({}));
+  for (const m of milestones) if (allowed.has(m.domain)) {
+    const b = bins[Math.min(BUCKETS - 1, Math.floor(m.s / W))];
+    b[m.domain] = (b[m.domain] || 0) + 1;
+  }
+  const tot = bins.map(b => Object.values(b).reduce((a, c) => a + c, 0));
+  const max = Math.max(1, ...tot);
+  $('hist').innerHTML = `<svg viewBox="0 0 1000 ${H}" preserveAspectRatio="none">` + bins.map((b, i) => {
+    const s0 = i * W, y0 = toYear(s0), y1 = toYear(s0 + W);
+    let y = H, bars = '', tipH = `<div class="t">${fmtYear(y0)} – ${fmtYear(y1)}</div><div class="m">${tot[i]} milestones in ${fmtSpan(y1 - y0)}</div>`;
+    for (const d of domainOrder) if (b[d]) {
+      const h = b[d] / max * H;
+      y -= h;
+      bars += `<rect x="${s0 + 1}" y="${y}" width="${W - 2}" height="${h}" fill="${COLORS[d]}"/>`;
+      tipH += `<div class="l"><span class="sw" style="background:${COLORS[d]}"></span> ${esc(byId.get(d).name)}: ${b[d]}</div>`;
+    }
+    tipH += '<div class="h">Click to jump to the end of this period</div>';
+    const cls = s0 > curS ? 'future' : curS < s0 + W ? 'cur' : '';
+    return `<g class="${cls}" data-s="${s0 + W}" data-html="${esc(tipH)}"><rect class="hit" x="${s0}" y="0" width="${W}" height="${H}"/>${bars}</g>`;
+  }).join('') + '</svg>';
+}
+
+function renderWeb() {
+  const target = layout();
+  const start = new Map();
+  for (const id of target.keys()) {
+    let m = byId.get(id);
+    while (m && !shown.has(m.id)) m = byId.get(m.parent);
+    start.set(id, m ? shown.get(m.id) : target.get(id));
+  }
+  for (const [id, e] of els) if (!target.has(id)) { e.g.remove(); e.link?.remove(); els.delete(id); }
+  const dimOn = selected && target.has(selected.id);
+
+  for (const id of target.keys()) {
+    const n = byId.get(id);
+    let e = els.get(id);
+    if (!e) {
+      e = { g: svgEl('g', { class: `node d${n.depth} new`, 'data-id': id }, nodeLayer) };
+      e.c = svgEl('path', { class: 'sym', d: n.group ? symbol('invention', [10, 8, 6][n.depth]) : symbol(n.kind, 4.5) }, e.g);
+      e.t = svgEl('text', { dy: '.32em' }, e.g);
+      if (n.parent) e.link = svgEl('path', { class: 'link', stroke: color(n) }, linkLayer);
+      if (n.depth === 1) e.t.style.fill = color(n);
+      els.set(id, e);
+    }
+    const open = isOpen(n), hidden = n.group && !open ? hiddenCount(n) : 0;
+    e.t.textContent = n.name + (hidden ? ` (+${hidden})` : '');
+    const hollow = n.group && open && n.depth > 0;
+    e.c.setAttribute('fill', hollow ? 'var(--bg)' : color(n));
+    e.c.style.stroke = hollow ? color(n) : '';
+    e.g.classList.toggle('sel', n === selected);
+    e.g.classList.toggle('recent', n.group ? hasRecent(n) : recent(n));
+    e.g.classList.toggle('old', !n.group && !recent(n));
+    e.g.classList.toggle('fresh', n.group ? n.leaves.some(fresh) : fresh(n));
+    const dim = dimOn && !related.has(id);
+    e.g.classList.toggle('dim', dim);
+    e.link?.classList.toggle('dim', dim);
+  }
+
+  anim = { target, start, t0: performance.now() };
+  if (!animating) { animating = true; frame(anim.t0); }
+}
+
+function frame(now) {
+  const t = Math.min(1, (now - anim.t0) / 450), k = 1 - (1 - t) ** 3;
+  shown = new Map();
+  for (const [id, p] of anim.target) {
+    const s = anim.start.get(id);
+    shown.set(id, { a: s.a + (p.a - s.a) * k, r: s.r + (p.r - s.r) * k });
+  }
+  draw();
+  if (t < 1) requestAnimationFrame(frame); else animating = false;
+}
+
+function draw() {
+  for (const [id, p] of shown) {
+    const n = byId.get(id), e = els.get(id), [x, y] = xy(p);
+    e.g.setAttribute('transform', `translate(${x},${y})`);
+    if (e.link) e.link.setAttribute('d', linkPath(shown.get(n.parent), p));
+    placeLabel(n, p.a, e.t);
+  }
+  drawXlinks(xLayer, id => {
+    let m = byId.get(id);
+    while (!shown.has(m.id)) m = byId.get(m.parent);
+    return xy(shown.get(m.id));
+  }, shown.has(selected?.id), (x0, y0, x1, y1) => `M${x0},${y0}Q${(x0 + x1) * .25},${(y0 + y1) * .25} ${x1},${y1}`);
+}
+
+function placeLabel(n, a, t) {
+  a = ((a + rot) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
+  if (n.depth === 0) { t.setAttribute('transform', 'translate(0,24)'); t.setAttribute('text-anchor', 'middle'); return; }
+  if (n.depth === 1) {
+    const s = Math.sin(a), c = -Math.cos(a);
+    t.setAttribute('transform', `translate(${s * 14},${c * 14 + 4})`);
+    t.setAttribute('text-anchor', s > 0.3 ? 'start' : s < -0.3 ? 'end' : 'middle');
+    return;
+  }
+  const flip = a > Math.PI, deg = a * 180 / Math.PI - 90;
+  t.setAttribute('transform', `rotate(${flip ? deg + 180 : deg}) translate(${flip ? -9 : 9},0)`);
+  t.setAttribute('text-anchor', flip ? 'end' : 'start');
+}
+
+// Dashed links from the selected milestone. posOf returns null when the other end isn't drawn.
+function drawXlinks(layer, posOf, selShown, curve) {
+  layer.replaceChildren();
+  if (!selected || !selShown) return;
+  const [x0, y0] = posOf(selected.id);
+  const kinds = [
+    [selected.from || [], '#f2c14e', m => `${selected.name} built on ${m.name}`],
+    [selected.ledTo, '#5ad1ff', m => `${selected.name} led to ${m.name}`],
+    [selected.explains || [], '#4ade80', m => `${selected.name} explained ${m.name}, ${fmtSpan(selected.year - m.year)} after it was first used`],
+    [selected.explainedBy, '#4ade80', m => `${m.name} explained how ${selected.name} works, ${fmtSpan(m.year - selected.year)} later`],
+  ];
+  for (const [ids, stroke, label] of kinds) {
+    for (const id of ids) {
+      const m = byId.get(id);
+      if (m.year > cur) continue;
+      const p = posOf(id);
+      if (!p) continue;
+      svgEl('path', { class: 'xlink', stroke, d: curve(x0, y0, p[0], p[1]), 'data-tip': label(m) }, layer);
+    }
+  }
+}
+
+// Map view
+const mapDots = $('mapDots');
+$('land').setAttribute('d', LAND);
+let mapShown = new Set(), mapS = 1;
+const placeDot = (g, m) => g.setAttribute('transform', `translate(${m.mx},${m.my}) scale(${mapS})`);
+const onMap = m => m.where && m.year <= cur && allowed.has(m.domain) && (!$('hideOld').checked || recent(m) || m === selected);
+function renderMap() {
+  mapDots.replaceChildren();
+  const next = new Set();
+  const dimOn = selected && onMap(selected);
+  for (const m of milestones) {
+    if (!onMap(m)) continue;
+    next.add(m.id);
+    const cls = ['node', 'mapdot', !mapShown.has(m.id) && 'new', recent(m) ? 'recent' : 'old', fresh(m) && 'fresh', m === selected && 'sel', dimOn && !related.has(m.id) && 'dim'];
+    const g = svgEl('g', { class: cls.filter(Boolean).join(' '), 'data-id': m.id }, mapDots);
+    placeDot(g, m);
+    svgEl('path', { class: 'sym', d: symbol(m.kind, 3), fill: color(m) }, g);
+    if (recent(m) || m === selected) svgEl('text', { x: 5, dy: '.32em' }, g).textContent = m.name;
+  }
+  mapShown = next;
+  drawXlinks($('mapX'), id => { const m = byId.get(id); return mapShown.has(id) ? [m.mx, m.my] : null; }, mapShown.has(selected?.id),
+    (x0, y0, x1, y1) => `M${x0},${y0}Q${(x0 + x1) / 2},${(y0 + y1) / 2 - Math.hypot(x1 - x0, y1 - y0) * .3} ${x1},${y1}`);
+}
+
+// Header
+function updateHeader() {
+  $('year').textContent = fmtYear(cur);
+  $('era').textContent = eraOf(cur).name;
+  $('count').textContent = `${milestones.filter(m => m.year <= cur).length} of ${milestones.length} milestones`;
+  const box = $('latest');
+  box.replaceChildren();
+  let list;
+  if (stepFrom !== null) {
+    list = milestones.filter(fresh);
+    htmlEl('b', `New since last step (${fmtYear(stepFrom)} → ${fmtYear(cur)}), ${list.length}: `, box);
+  } else {
+    list = milestones.filter(recent).sort((a, b) => b.year - a.year).slice(0, 12);
+    if (list.length) htmlEl('b', 'This era: ', box);
+  }
+  list.forEach((m, i) => {
+    if (i) box.append(' · ');
+    const a = htmlEl('a', `${m.name} (${fmtYear(m.year)})`, box);
+    a.dataset.id = m.id;
+    a.style.color = color(m);
+    a.onclick = () => select(m, false);
+  });
+}
+
+function setYear(y, s = toSlider(y), keepSteps = false) {
+  if (!keepSteps) { stepFrom = null; stepStack.length = 0; }
+  cur = y; curS = s;
+  $('slider').value = s;
+  render();
+}
+
+// A step covers the next STEP_BATCH milestones, or one era-width if that holds fewer.
+const STEP_BATCH = 8;
+function stepForward() {
+  const ahead = milestones.filter(m => m.year > cur);
+  if (!ahead.length && cur >= END) return;
+  const byWidth = toYear(Math.min(1000, curS + +$('window').value));
+  const y = !ahead.length ? END : Math.max(ahead[0].year, Math.min(ahead[Math.min(STEP_BATCH, ahead.length) - 1].year, byWidth));
+  stepStack.push([cur, curS]);
+  stepFrom = cur;
+  setYear(y, toSlider(y), true);
+}
+function stepBack() {
+  const prev = stepStack.pop();
+  if (prev) {
+    stepFrom = stepStack.length ? stepStack[stepStack.length - 1][0] : null;
+    setYear(prev[0], prev[1], true);
+  } else {
+    const s = Math.max(0, curS - +$('window').value);
+    setYear(toYear(s), s);
+  }
+}
+
+function select(n, fromGraph) {
+  if (fromGraph && n.group && n.depth > 0) {
+    if (allowed.has(n.domain)) { manual.set(n.id, !isOpen(n)); render(); }
+    return;
+  }
+  if (!fromGraph) {
+    for (const m of ancestors(n)) if (m.depth > 0) manual.set(m.id, true);
+    if (n.domain && !allowed.has(n.domain)) { allowed.add(n.domain); $(`dom_${n.domain}`).checked = true; }
+  }
+  selected = n;
+  if (n.year > cur) setYear(n.year); else render();
+  showPanel(n);
+  $('panel').classList.add('pinned');
+}
+
+function deselect() {
+  selected = null;
+  $('panel').classList.remove('pinned');
+  render();
+}
+
+function showPanel(n) {
+  $('panel').dataset.shows = n.id;
+  $('pPath').textContent = ancestors(n).reverse().slice(1).map(m => m.name).join(' › ');
+  $('pName').textContent = n.name;
+  $('pName').style.color = color(n);
+  $('pYear').textContent = (n.group ? 'From ' : '') + fmtYear(n.year) + ` · ${eraOf(n.year).name}`;
+  const meta = n.group
+    ? [`${n.leaves.length} milestones`]
+    : [KINDS[n.kind].label, n.where && REGIONS[n.where].name, chain(n).size && `stands on ${chain(n).size} earlier milestones`];
+  $('pMeta').textContent = meta.filter(Boolean).join(' · ');
+  $('pDesc').textContent = n.desc || '';
+  $('pWiki').replaceChildren();
+  if (n.wiki) {
+    const a = htmlEl('a', 'Read more on Wikipedia ↗', $('pWiki'));
+    a.href = `https://en.wikipedia.org/wiki/Special:Search?go=Go&search=${encodeURIComponent(n.wiki)}`;
+    a.target = '_blank';
+    a.rel = 'noopener';
+  }
+  const rel = $('pRel');
+  rel.replaceChildren();
+  const section = (title, list) => {
+    if (!list.length) return;
+    htmlEl('h4', title, rel);
+    for (const m of list) {
+      const b = htmlEl('button', `${m.name} · ${fmtYear(m.year)}`, rel);
+      b.className = 'chip' + (m.year > cur ? ' future' : '');
+      b.style.borderColor = color(m);
+      b.dataset.id = m.id;
+      b.onclick = () => select(m, false);
+    }
+  };
+  const ids = a => (a || []).map(id => byId.get(id));
+  section('Built on', ids(n.from));
+  section('Led to', ids(n.ledTo));
+  section('Explains (used before it was understood)', ids(n.explains));
+  section('Explained later by', ids(n.explainedBy));
+  section('Contains', n.kids);
+}
+
+// Tooltips
+const tip = $('tip');
+function tipHTML(n) {
+  const c = color(n);
+  let h = `<div class="t" style="color:${c}">${esc(n.name)}</div>`;
+  if (n.group) {
+    const seen = n.leaves.filter(l => l.year <= cur).length;
+    h += `<div class="m">Since ${fmtYear(n.year)} · ${seen} of ${n.leaves.length} milestones so far</div>`;
+    if (n.desc) h += `<div class="d">${esc(n.desc)}</div>`;
+    const kids = n.kids.filter(k => k.year <= cur).map(k => k.name);
+    if (kids.length) h += `<div class="l">${n.depth === 0 ? 'Domains' : 'Contains'}: ${esc(kids.slice(0, 12).join(', '))}${kids.length > 12 ? '…' : ''}</div>`;
+    if (n.depth > 0) h += `<div class="h">Click to ${isOpen(n) ? 'close' : 'open'} · details in the side panel</div>`;
+    return h;
+  }
+  h += `<div class="m">${[fmtYear(n.year), KINDS[n.kind].label, n.where && REGIONS[n.where].name].filter(Boolean).map(esc).join(' · ')}</div>`;
+  h += `<div class="d">${esc(n.desc)}</div>`;
+  const names = a => esc((a || []).map(id => byId.get(id).name).join(', '));
+  if (n.from) h += `<div class="l">Built on: ${names(n.from)}</div>`;
+  if (n.ledTo.length) h += `<div class="l">Led to: ${names(n.ledTo)}</div>`;
+  for (const id of n.explains || []) { const m = byId.get(id); h += `<div class="l">Explains ${esc(m.name)}, used ${fmtSpan(n.year - m.year)} earlier</div>`; }
+  for (const id of n.explainedBy) { const m = byId.get(id); h += `<div class="l">Explained by ${esc(m.name)}, ${fmtSpan(m.year - n.year)} later</div>`; }
+  if (chain(n).size) h += `<div class="l">Stands on ${chain(n).size} earlier milestones in total</div>`;
+  if (n.year > cur) h += `<div class="h">Not yet reached at ${fmtYear(cur)}</div>`;
+  h += `<div class="h">Click for details and links</div>`;
+  return h;
+}
+function placeTip(e) {
+  const pad = 14, w = tip.offsetWidth, h = tip.offsetHeight;
+  tip.style.left = Math.min(e.clientX + pad, innerWidth - w - 4) + 'px';
+  tip.style.top = (e.clientY + pad + h > innerHeight ? e.clientY - h - pad : e.clientY + pad) + 'px';
+}
+document.addEventListener('pointermove', e => {
+  if (drag?.moved) { tip.style.display = 'none'; return; }
+  const slider = $('slider');
+  let html = null;
+  if (e.target === slider) {
+    const r = slider.getBoundingClientRect(), y = toYear(Math.max(0, Math.min(1000, (e.clientX - r.left) / r.width * 1000)));
+    html = `<div class="t">${fmtYear(y)}</div><div class="m">${eraOf(y).name}</div><div class="h">Drag to move through time</div>`;
+  } else {
+    const t = e.target.closest?.('[data-id],[data-tip],[data-html]');
+    if (t?.dataset.id && svg.contains(t)) { if (!selected && $('panel').dataset.shows !== t.dataset.id) showPanel(byId.get(t.dataset.id)); }
+    else if (t?.dataset.id) html = tipHTML(byId.get(t.dataset.id));
+    else if (t?.dataset.html) html = t.dataset.html;
+    else if (t) html = esc(t.dataset.tip);
+  }
+  if (!html) { tip.style.display = 'none'; return; }
+  if (tip.innerHTML !== html) tip.innerHTML = html;
+  tip.style.display = 'block';
+  placeTip(e);
+});
+document.addEventListener('pointerleave', () => tip.style.display = 'none');
+
+// Pan and zoom, kept separately for each view
+const svg = $('graph');
+const views = {};
+function resetView() {
+  const w = svg.clientWidth, h = svg.clientHeight;
+  views[mode] = mode === 'web'
+    ? { x: 0, y: 0, k: Math.min(w, h) / (2 * (radii[3] + 170)) }
+    : { x: 0, y: 0, k: Math.min(w / 1100, h / 560) };
+  if (mode === 'web') { rot = 0; draw(); }
+  applyView();
+}
+function applyView() {
+  const v = views[mode];
+  const w = svg.clientWidth, h = svg.clientHeight;
+  svg.setAttribute('viewBox', `${-(w / 2 + v.x) / v.k} ${-(h / 2 + v.y) / v.k} ${w / v.k} ${h / v.k}`);
+  if (mode !== 'map') return;
+  const k = Math.min(svg.clientWidth / 1100, svg.clientHeight / 560) / v.k;
+  if (k !== mapS) { mapS = k; renderMap(); }
+}
+let drag = null;
+svg.addEventListener('pointerdown', e => {
+  const v = views[mode];
+  drag = { x: e.clientX, y: e.clientY, vx: v.x, vy: v.y, moved: false, node: e.target.closest('.node')?.dataset.id };
+  svg.setPointerCapture(e.pointerId);
+});
+svg.addEventListener('pointermove', e => {
+  if (!drag) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  if (Math.abs(dx) + Math.abs(dy) > 4) { drag.moved = true; svg.classList.add('dragging'); }
+  if (drag.moved) { views[mode].x = drag.vx + dx; views[mode].y = drag.vy + dy; applyView(); }
+});
+svg.addEventListener('pointerup', () => {
+  if (drag && !drag.moved) drag.node ? select(byId.get(drag.node), true) : deselect();
+  drag = null;
+  svg.classList.remove('dragging');
+});
+svg.addEventListener('wheel', e => {
+  e.preventDefault();
+  if (e.shiftKey && mode === 'web') { rot += (e.deltaY || e.deltaX) * 0.002; draw(); return; }
+  const v = views[mode], f = Math.exp(-e.deltaY * 0.0015), r = svg.getBoundingClientRect();
+  const mx = e.clientX - r.left, my = e.clientY - r.top;
+  const cx = svg.clientWidth / 2 + v.x, cy = svg.clientHeight / 2 + v.y;
+  v.x = mx - (mx - cx) * f - svg.clientWidth / 2;
+  v.y = my - (my - cy) * f - svg.clientHeight / 2;
+  v.k *= f;
+  applyView();
+  clearTimeout(zoomEnd);
+  // ponytail: Firefox keeps a stretched bitmap after zooming until something repaints; re-render once the wheel goes quiet
+  zoomEnd = setTimeout(render, 600);
+}, { passive: false });
+let zoomEnd;
+window.addEventListener('resize', applyView);
+
+function setMode(m) {
+  mode = m;
+  $('world').style.display = m === 'web' ? '' : 'none';
+  $('mapWorld').style.display = m === 'map' ? '' : 'none';
+  $('vWeb').classList.toggle('on', m === 'web');
+  $('vMap').classList.toggle('on', m === 'map');
+  if (!views[m]) resetView(); else applyView();
+  $('hint').textContent = `Hover for details · click group to open/close · drag to pan${m === 'web' ? ' · shift+scroll to rotate' : ''} · scroll to zoom · click milestone to pin · Esc to unpin`;
+}
+
+// Controls
+const slider = $('slider');
+slider.addEventListener('input', () => setYear(toYear(+slider.value), +slider.value));
+let timer = null;
+const stop = () => { clearInterval(timer); timer = null; $('play').textContent = '▶ Play'; };
+$('play').onclick = () => {
+  if (timer) return stop();
+  if (+slider.value >= 1000) setYear(START, 0);
+  $('play').textContent = '❚❚ Pause';
+  timer = setInterval(() => {
+    const s = Math.min(1000, +slider.value + 2);
+    setYear(toYear(s), s);
+    if (s >= 1000) stop();
+  }, 60);
+};
+$('fwd').onclick = () => { stop(); stepForward(); };
+$('back').onclick = () => { stop(); stepBack(); };
+$('expandAll').onclick = () => { for (const n of byId.values()) if (n.group && n.depth > 0) manual.set(n.id, true); render(); };
+$('collapseAll').onclick = () => { for (const n of byId.values()) if (n.group && n.depth > 0) manual.set(n.id, false); render(); };
+$('resetView').onclick = resetView;
+$('auto').onchange = () => { manual.clear(); render(); };
+$('hideOld').onchange = render;
+$('window').onchange = render;
+$('pClose').onclick = deselect;
+$('pMin').onclick = () => $('pMin').textContent = $('panel').classList.toggle('min') ? '+' : '–';
+$('pBar').onpointerdown = e => {
+  if (e.target.closest('button')) return;
+  const bar = $('pBar'), p = $('panel'), r = p.getBoundingClientRect(), s = $('stage').getBoundingClientRect();
+  const dx = e.clientX - r.left, dy = e.clientY - r.top;
+  bar.setPointerCapture(e.pointerId);
+  bar.onpointermove = m => {
+    p.style.left = Math.max(0, Math.min(s.width - p.offsetWidth, m.clientX - s.left - dx)) + 'px';
+    p.style.top = Math.max(0, Math.min(s.height - bar.offsetHeight, m.clientY - s.top - dy)) + 'px';
+    p.style.right = p.style.bottom = 'auto';
+  };
+  bar.onpointerup = () => bar.onpointermove = null;
+};
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && selected) deselect(); });
+$('histBox').ontoggle = renderHist;
+$('hist').onclick = e => {
+  const g = e.target.closest('[data-s]');
+  if (g) { stop(); const s = Math.min(1000, +g.dataset.s); setYear(toYear(s), s); }
+};
+$('vWeb').onclick = () => setMode('web');
+$('vMap').onclick = () => setMode('map');
+
+const names = $('names');
+for (const n of byId.values()) {
+  const o = document.createElement('option');
+  o.value = n.name;
+  o.label = n.group ? 'group' : fmtYear(n.year);
+  names.appendChild(o);
+}
+$('search').addEventListener('change', e => {
+  const q = e.target.value.trim().toLowerCase();
+  if (!q) return;
+  const all = [...byId.values()];
+  const n = all.find(m => m.name.toLowerCase() === q) || all.find(m => m.name.toLowerCase().includes(q));
+  if (n) { select(n, false); e.target.value = ''; }
+});
+
+for (const [k, v] of Object.entries(KINDS)) {
+  const s = htmlEl('span', '', $('kinds'));
+  s.className = 'legend';
+  s.dataset.tip = v.tip;
+  s.innerHTML = `<svg width="12" height="12" viewBox="-6 -6 12 12"><path d="${symbol(k, 4.2)}" fill="#cfd3da"/></svg>`;
+  s.append(v.label);
+}
+
+for (const d of domains) {
+  const l = htmlEl('label', '', $('domains'));
+  l.dataset.id = d.id;
+  l.innerHTML = `<input type="checkbox" id="dom_${d.id}" checked><span class="sw" style="background:${COLORS[d.id]}"></span>`;
+  l.append(d.name);
+  l.querySelector('input').onchange = e => { e.target.checked ? allowed.add(d.id) : allowed.delete(d.id); render(); };
+}
+
+ERAS.forEach((e, i) => {
+  const from = Math.max(START, i ? ERAS[i - 1].to : START), to = Math.min(END, e.to);
+  const s = htmlEl('span', '', $('eras'));
+  s.style.left = `${toSlider(from) / 10}%`;
+  s.style.width = `${(toSlider(to) - toSlider(from)) / 10}%`;
+  s.style.background = `hsl(${210 + i * 22} 30% ${i % 2 ? 32 : 40}%)`;
+  s.dataset.tip = `${e.name} (${fmtYear(from)}${i ? '' : ' and earlier'} – ${e.to === Infinity ? 'today' : fmtYear(e.to)}): ${e.desc}`;
+});
+for (const y of [-10000, -5000, -2000, 0, 1000, 1500, 1800, 1900, 2000]) {
+  const s = htmlEl('span', y === 0 ? '1 CE' : fmtYear(y), $('ticks'));
+  s.style.left = `${toSlider(y) / 10}%`;
+}
+
+setYear(START, 0);
+setMode('web');
+showPanel(root);
+</script>
+</body>
+</html>
